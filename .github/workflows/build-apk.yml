@@ -1,39 +1,49 @@
 name: Build Flutter APK
 
 on:
-  workflow_dispatch:
   push:
     branches:
       - main
+  workflow_dispatch:
 
 jobs:
   build:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout
+      - name: Checkout repository
         uses: actions/checkout@v4
 
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.35.0'
           channel: stable
 
-      - name: Create missing Flutter files
-        run: |
-          flutter create .
+      - name: Check Flutter version
+        run: flutter --version
 
-      - name: Get packages
+      - name: Create Flutter project if needed
         run: |
-          flutter pub get
+          if [ ! -f "pubspec.yaml" ]; then
+            flutter create --project-name activity_report_app .
+          fi
+
+      - name: Verify project name
+        run: |
+          echo "Checking pubspec.yaml..."
+          grep "^name:" pubspec.yaml
+
+      - name: Get dependencies
+        run: flutter pub get
+
+      - name: Analyze Flutter project
+        run: flutter analyze
 
       - name: Build APK
-        run: |
-          flutter build apk --release
+        run: flutter build apk --release
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: activity-report-apk
+          name: activity-report-app-apk
           path: build/app/outputs/flutter-apk/app-release.apk
