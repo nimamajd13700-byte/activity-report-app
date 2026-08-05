@@ -1,63 +1,46 @@
 name: Build Flutter APK
 
 on:
-push:
-branches:
-- main
-workflow_dispatch:
+  workflow_dispatch:
 
 jobs:
-build:
-runs-on: ubuntu-latest
+  build:
+    runs-on: ubuntu-latest
 
-steps:
-  - name: Checkout repository
-    uses: actions/checkout@v4
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
 
-  - name: Setup Flutter
-    uses: subosito/flutter-action@v2
-    with:
-      channel: stable
-      flutter-version: "3.35.0"
-      cache: true
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
 
-  - name: Flutter version
-    run: flutter --version
+      - name: Create Flutter project
+        run: flutter create --platforms=android /tmp/app
 
-  - name: Create standard Flutter project
-    run: |
-      cd /tmp
-      flutter create --platforms=android activity_report_build
+      - name: Copy lib
+        run: cp -r lib /tmp/app/
 
-  - name: Copy app code
-    run: |
-      rm -rf /tmp/activity_report_build/lib
-      cp -r "$GITHUB_WORKSPACE/lib" /tmp/activity_report_build/lib
+      - name: Copy pubspec
+        run: cp pubspec.yaml /tmp/app/
 
-  - name: Copy assets
-    run: |
-      if [ -d "$GITHUB_WORKSPACE/assets" ]; then
-        cp -r "$GITHUB_WORKSPACE/assets" /tmp/activity_report_build/assets
-      fi
+      - name: Copy assets
+        run: |
+          if [ -d "assets" ]; then
+            cp -r assets /tmp/app/
+          fi
 
-  - name: Copy pubspec
-    run: |
-      cp "$GITHUB_WORKSPACE/pubspec.yaml" /tmp/activity_report_build/pubspec.yaml
+      - name: Get dependencies
+        working-directory: /tmp/app
+        run: flutter pub get
 
-  - name: Get dependencies
-    working-directory: /tmp/activity_report_build
-    run: flutter pub get
+      - name: Build APK
+        working-directory: /tmp/app
+        run: flutter build apk --release
 
-  - name: Analyze project
-    working-directory: /tmp/activity_report_build
-    run: flutter analyze
-
-  - name: Build APK
-    working-directory: /tmp/activity_report_build
-    run: flutter build apk --release
-
-  - name: Upload APK
-    uses: actions/upload-artifact@v4
-    with:
-      name: activity-report-app-release
-      path: /tmp/activity_report_build/build/app/outputs/flutter-apk/app-release.apk
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: activity-report-app-release
+          path: /tmp/app/build/app/outputs/flutter-apk/app-release.apk
