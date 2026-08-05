@@ -31,6 +31,10 @@ class ActivityReportApp extends StatelessWidget {
   }
 }
 
+// =====================
+// مدل گزارش
+// =====================
+
 class Report {
   final String id;
   final String expert;
@@ -66,12 +70,14 @@ class Report {
       date: json['date']?.toString() ?? '',
       activity: json['activity']?.toString() ?? '',
       description: json['description']?.toString() ?? '',
-      minutes: json['minutes'] is int
-          ? json['minutes']
-          : int.tryParse(json['minutes']?.toString() ?? '') ?? 0,
+      minutes: int.tryParse(json['minutes'].toString()) ?? 0,
     );
   }
 }
+
+// =====================
+// صفحه اصلی
+// =====================
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -105,6 +111,10 @@ class _HomePageState extends State<HomePage> {
     _load();
   }
 
+  // =====================
+  // ذخیره و بارگذاری
+  // =====================
+
   Future<void> _load() async {
     final prefs = await SharedPreferences.getInstance();
 
@@ -115,14 +125,10 @@ class _HomePageState extends State<HomePage> {
 
     for (final item in savedReports) {
       try {
-        final json = jsonDecode(item);
-
-        if (json is Map<String, dynamic>) {
-          loadedReports.add(Report.fromJson(json));
-        }
-      } catch (_) {
-        // فایل خراب را نادیده می‌گیریم.
-      }
+        loadedReports.add(
+          Report.fromJson(jsonDecode(item)),
+        );
+      } catch (_) {}
     }
 
     if (!mounted) return;
@@ -141,20 +147,45 @@ class _HomePageState extends State<HomePage> {
 
     await prefs.setStringList(
       'reports',
-      reports.map((report) => jsonEncode(report.toJson())).toList(),
+      reports.map((r) => jsonEncode(r.toJson())).toList(),
     );
 
-    await prefs.setStringList('activities', activities);
+    await prefs.setStringList(
+      'activities',
+      activities,
+    );
   }
 
+  // =====================
+  // پیام
+  // =====================
+
+  void _msg(String message) {
+    if (!mounted) return;
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+      ),
+    );
+  }
+
+  // =====================
+  // ثبت فعالیت
+  // =====================
+
   Future<void> addReport() async {
-    String activity =
-        activities.isNotEmpty ? activities.first : 'سایر';
+    if (activities.isEmpty) {
+      _msg('ابتدا حداقل یک فعالیت تعریف کنید.');
+      return;
+    }
+
+    String selectedActivity = activities.first;
 
     final descriptionController = TextEditingController();
     final minutesController = TextEditingController(text: '60');
 
-    final ok = await showDialog<bool>(
+    final result = await showDialog<bool>(
       context: context,
       builder: (dialogContext) {
         return StatefulBuilder(
@@ -166,24 +197,22 @@ class _HomePageState extends State<HomePage> {
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     DropdownButtonFormField<String>(
-                      initialValue: activity,
+                      value: selectedActivity,
                       decoration: const InputDecoration(
                         labelText: 'نوع فعالیت',
                       ),
-                      items: activities
-                          .map(
-                            (item) => DropdownMenuItem<String>(
-                              value: item,
-                              child: Text(item),
-                            ),
-                          )
-                          .toList(),
+                      items: activities.map((activity) {
+                        return DropdownMenuItem<String>(
+                          value: activity,
+                          child: Text(activity),
+                        );
+                      }).toList(),
                       onChanged: (value) {
-                        if (value != null) {
-                          setDialogState(() {
-                            activity = value;
-                          });
-                        }
+                        if (value == null) return;
+
+                        setDialogState(() {
+                          selectedActivity = value;
+                        });
                       },
                     ),
                     const SizedBox(height: 12),
@@ -197,7 +226,7 @@ class _HomePageState extends State<HomePage> {
                     const SizedBox(height: 12),
                     TextField(
                       controller: descriptionController,
-                      maxLines: 3,
+                      maxLines: 4,
                       decoration: const InputDecoration(
                         labelText: 'شرح فعالیت',
                       ),
@@ -225,37 +254,51 @@ class _HomePageState extends State<HomePage> {
       },
     );
 
-    if (ok == true) {
-      final minutes =
-          int.tryParse(minutesController.text.trim()) ?? 0;
-
-      final report = Report(
-        id: DateTime.now().microsecondsSinceEpoch.toString(),
-        expert: expert,
-        date: DateFormat('yyyy-MM-dd').format(DateTime.now()),
-        activity: activity,
-        description: descriptionController.text.trim(),
-        minutes: minutes,
-      );
-
-      setState(() {
-        reports.add(report);
-      });
-
-      await _save();
-
-      if (!mounted) return;
-
-      _msg('فعالیت با موفقیت ثبت شد.');
+    if (result != true) {
+      descriptionController.dispose();
+      minutesController.dispose();
+      return;
     }
+
+    final minutes = int.tryParse(minutesController.text.trim()) ?? 0;
+
+    if (minutes <= 0) {
+      _msg('مدت فعالیت را صحیح وارد کنید.');
+      descriptionController.dispose();
+      minutesController.dispose();
+      return;
+    }
+
+    final report = Report(
+      id: DateTime.now().microsecondsSinceEpoch.toString(),
+      expert: expert,
+      date: DateFormat('yyyy-MM-dd').format(DateTime.now()),
+      activity: selectedActivity,
+      description: descriptionController.text.trim(),
+      minutes: minutes,
+    );
+
+    reports.add(report);
+
+    await _save();
 
     descriptionController.dispose();
     minutesController.dispose();
+
+    if (!mounted) return;
+
+    setState(() {});
+
+    _msg('فعالیت با موفقیت ثبت شد.');
   }
+
+  // =====================
+  // خروجی گزارش کارشناس
+  // =====================
 
   Future<void> exportReports() async {
     if (reports.isEmpty) {
-      _msg('هنوز گزارشی برای خروجی وجود ندارد.');
+      _msg('هنوز گزارشی ثبت نشده است.');
       return;
     }
 
@@ -263,14 +306,13 @@ class _HomePageState extends State<HomePage> {
       'format': 'activity_report_v1',
       'expert': expert,
       'createdAt': DateTime.now().toIso8601String(),
-      'reports': reports.map((report) => report.toJson()).toList(),
+      'reports': reports.map((r) => r.toJson()).toList(),
     };
 
     final directory = await getApplicationDocumentsDirectory();
 
     final file = File(
-      '${directory.path}/report_'
-      '${DateFormat('yyyyMMdd_HHmmss').format(DateTime.now())}.json',
+      '${directory.path}/report_${DateFormat('yyyyMMdd_HHmmss').format(DateTime.now())}.json',
     );
 
     await file.writeAsString(
@@ -284,6 +326,10 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
+  // =====================
+  // ورود گزارش مدیر
+  // =====================
+
   Future<void> importReports() async {
     final result = await FilePicker.platform.pickFiles(
       type: FileType.custom,
@@ -295,53 +341,59 @@ class _HomePageState extends State<HomePage> {
     final path = result.files.single.path;
 
     if (path == null) {
-      _msg('مسیر فایل پیدا نشد.');
+      _msg('امکان خواندن فایل وجود ندارد.');
       return;
     }
 
     try {
-      final file = File(path);
-      final text = await file.readAsString();
+      final text = await File(path).readAsString(
+        encoding: utf8,
+      );
 
-      final decoded = jsonDecode(text);
+      final data = jsonDecode(text);
 
-      if (decoded is! Map<String, dynamic>) {
-        _msg('فرمت فایل معتبر نیست.');
+      if (data is! Map<String, dynamic>) {
+        _msg('فرمت فایل صحیح نیست.');
         return;
       }
 
-      if (decoded['format'] != 'activity_report_v1') {
+      if (data['format'] != 'activity_report_v1') {
         _msg('این فایل گزارش فعالیت معتبر نیست.');
         return;
       }
 
-      final reportsData = decoded['reports'];
+      final list = data['reports'];
 
-      if (reportsData is! List) {
-        _msg('اطلاعات گزارش‌ها در فایل پیدا نشد.');
+      if (list is! List) {
+        _msg('گزارشی داخل فایل پیدا نشد.');
         return;
       }
 
       final incoming = <Report>[];
 
-      for (final item in reportsData) {
-        if (item is Map<String, dynamic>) {
-          incoming.add(Report.fromJson(item));
-        }
+      for (final item in list) {
+        try {
+          incoming.add(
+            Report.fromJson(
+              Map<String, dynamic>.from(item),
+            ),
+          );
+        } catch (_) {}
       }
 
-      final existingIds =
-          reports.map((report) => report.id).toSet();
+      final existingIds = reports.map((r) => r.id).toSet();
 
-      final fresh = incoming
-          .where((report) => !existingIds.contains(report.id))
-          .toList();
+      final fresh = incoming.where(
+        (r) => !existingIds.contains(r.id),
+      );
 
-      setState(() {
-        reports.addAll(fresh);
-      });
+      reports.addAll(fresh);
 
       await _save();
+
+      if (!mounted) return;
+
+      setState(() {});
 
       _msg('${fresh.length} گزارش جدید وارد شد.');
     } catch (_) {
@@ -349,9 +401,13 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
+  // =====================
+  // خروجی CSV مدیر
+  // =====================
+
   Future<void> exportManagerCsv() async {
     if (reports.isEmpty) {
-      _msg('هنوز گزارشی برای خروجی وجود ندارد.');
+      _msg('هنوز گزارشی وجود ندارد.');
       return;
     }
 
@@ -364,12 +420,12 @@ class _HomePageState extends State<HomePage> {
         'شرح',
       ],
       ...reports.map(
-        (report) => [
-          report.expert,
-          report.date,
-          report.activity,
-          report.minutes,
-          report.description,
+        (r) => [
+          r.expert,
+          r.date,
+          r.activity,
+          r.minutes,
+          r.description,
         ],
       ),
     ];
@@ -379,8 +435,7 @@ class _HomePageState extends State<HomePage> {
     final directory = await getApplicationDocumentsDirectory();
 
     final file = File(
-      '${directory.path}/manager_report_'
-      '${DateFormat('yyyyMMdd_HHmmss').format(DateTime.now())}.csv',
+      '${directory.path}/manager_report_${DateFormat('yyyyMMdd_HHmmss').format(DateTime.now())}.csv',
     );
 
     await file.writeAsString(
@@ -390,9 +445,13 @@ class _HomePageState extends State<HomePage> {
 
     await Share.shareXFiles(
       [XFile(file.path)],
-      text: 'گزارش تجمیعی فعالیت کارشناسان',
+      text: 'گزارش تجمیعی',
     );
   }
+
+  // =====================
+  // گزارش ماهانه
+  // =====================
 
   Future<void> showMonthlyReport() async {
     String selectedMonth =
@@ -400,17 +459,23 @@ class _HomePageState extends State<HomePage> {
 
     String selectedExpert = 'همه';
 
-    final months = <String>{
+    final monthSet = <String>{
       selectedMonth,
-      ...reports
-          .where((report) => report.date.length >= 7)
-          .map((report) => report.date.substring(0, 7)),
-    }.toList()
-      ..sort();
+      ...reports.map(
+        (r) {
+          if (r.date.length >= 7) {
+            return r.date.substring(0, 7);
+          }
+          return selectedMonth;
+        },
+      ),
+    };
+
+    final months = monthSet.toList()..sort();
 
     final experts = <String>{
       'همه',
-      ...reports.map((report) => report.expert),
+      ...reports.map((r) => r.expert),
     }.toList();
 
     await showDialog(
@@ -418,15 +483,15 @@ class _HomePageState extends State<HomePage> {
       builder: (dialogContext) {
         return StatefulBuilder(
           builder: (context, setDialogState) {
-            final filtered = reports.where((report) {
-              return report.date.startsWith(selectedMonth) &&
+            final filtered = reports.where((r) {
+              return r.date.startsWith(selectedMonth) &&
                   (selectedExpert == 'همه' ||
-                      report.expert == selectedExpert);
+                      r.expert == selectedExpert);
             }).toList();
 
             final total = filtered.fold<int>(
               0,
-              (sum, report) => sum + report.minutes,
+              (sum, r) => sum + r.minutes,
             );
 
             final byActivity = <String, int>{};
@@ -443,7 +508,7 @@ class _HomePageState extends State<HomePage> {
             }
 
             return AlertDialog(
-              title: const Text('گزارش ماهانه و تجمیعی'),
+              title: const Text('گزارش ماهانه'),
               content: SizedBox(
                 width: 460,
                 child: SingleChildScrollView(
@@ -451,47 +516,42 @@ class _HomePageState extends State<HomePage> {
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       DropdownButtonFormField<String>(
-                        initialValue: selectedMonth,
+                        value: selectedMonth,
                         decoration: const InputDecoration(
                           labelText: 'ماه',
                         ),
-                        items: months
-                            .map(
-                              (month) => DropdownMenuItem<String>(
-                                value: month,
-                                child: Text(month),
-                              ),
-                            )
-                            .toList(),
+                        items: months.map((month) {
+                          return DropdownMenuItem<String>(
+                            value: month,
+                            child: Text(month),
+                          );
+                        }).toList(),
                         onChanged: (value) {
-                          if (value != null) {
-                            setDialogState(() {
-                              selectedMonth = value;
-                            });
-                          }
+                          if (value == null) return;
+
+                          setDialogState(() {
+                            selectedMonth = value;
+                          });
                         },
                       ),
-                      const SizedBox(height: 12),
+                      const SizedBox(height: 10),
                       DropdownButtonFormField<String>(
-                        initialValue: selectedExpert,
+                        value: selectedExpert,
                         decoration: const InputDecoration(
                           labelText: 'کارشناس',
                         ),
-                        items: experts
-                            .map(
-                              (expertName) =>
-                                  DropdownMenuItem<String>(
-                                value: expertName,
-                                child: Text(expertName),
-                              ),
-                            )
-                            .toList(),
+                        items: experts.map((item) {
+                          return DropdownMenuItem<String>(
+                            value: item,
+                            child: Text(item),
+                          );
+                        }).toList(),
                         onChanged: (value) {
-                          if (value != null) {
-                            setDialogState(() {
-                              selectedExpert = value;
-                            });
-                          }
+                          if (value == null) return;
+
+                          setDialogState(() {
+                            selectedExpert = value;
+                          });
                         },
                       ),
                       const SizedBox(height: 12),
@@ -502,7 +562,7 @@ class _HomePageState extends State<HomePage> {
                       ListTile(
                         title: const Text('مجموع ساعات'),
                         trailing: Text(
-                          '${(total / 60).toStringAsFixed(1)}',
+                          (total / 60).toStringAsFixed(1),
                         ),
                       ),
                       const Divider(),
@@ -562,6 +622,10 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
+  // =====================
+  // گزارش بازه
+  // =====================
+
   Future<void> showRangeReport() async {
     DateTime from =
         DateTime.now().subtract(const Duration(days: 30));
@@ -572,7 +636,7 @@ class _HomePageState extends State<HomePage> {
 
     final experts = <String>{
       'همه',
-      ...reports.map((report) => report.expert),
+      ...reports.map((r) => r.expert),
     }.toList();
 
     await showDialog(
@@ -580,29 +644,32 @@ class _HomePageState extends State<HomePage> {
       builder: (dialogContext) {
         return StatefulBuilder(
           builder: (context, setDialogState) {
-            final fromDate =
-                DateTime(from.year, from.month, from.day);
-
-            final toDate =
-                DateTime(to.year, to.month, to.day);
-
-            final filtered = reports.where((report) {
-              final date = DateTime.tryParse(report.date);
+            final filtered = reports.where((r) {
+              final date = DateTime.tryParse(r.date);
 
               if (date == null) return false;
 
-              final reportDate =
-                  DateTime(date.year, date.month, date.day);
+              final start = DateTime(
+                from.year,
+                from.month,
+                from.day,
+              );
 
-              return !reportDate.isBefore(fromDate) &&
-                  !reportDate.isAfter(toDate) &&
+              final end = DateTime(
+                to.year,
+                to.month,
+                to.day,
+              );
+
+              return !date.isBefore(start) &&
+                  !date.isAfter(end) &&
                   (selectedExpert == 'همه' ||
-                      report.expert == selectedExpert);
+                      r.expert == selectedExpert);
             }).toList();
 
             final total = filtered.fold<int>(
               0,
-              (sum, report) => sum + report.minutes,
+              (sum, r) => sum + r.minutes,
             );
 
             return AlertDialog(
@@ -618,19 +685,21 @@ class _HomePageState extends State<HomePage> {
                         subtitle: Text(
                           DateFormat('yyyy-MM-dd').format(from),
                         ),
-                        trailing:
-                            const Icon(Icons.calendar_month),
+                        trailing: const Icon(
+                          Icons.calendar_month,
+                        ),
                         onTap: () async {
-                          final date = await showDatePicker(
+                          final selected =
+                              await showDatePicker(
                             context: context,
                             firstDate: DateTime(2020),
                             lastDate: DateTime(2100),
                             initialDate: from,
                           );
 
-                          if (date != null) {
+                          if (selected != null) {
                             setDialogState(() {
-                              from = date;
+                              from = selected;
                             });
                           }
                         },
@@ -640,43 +709,42 @@ class _HomePageState extends State<HomePage> {
                         subtitle: Text(
                           DateFormat('yyyy-MM-dd').format(to),
                         ),
-                        trailing:
-                            const Icon(Icons.calendar_month),
+                        trailing: const Icon(
+                          Icons.calendar_month,
+                        ),
                         onTap: () async {
-                          final date = await showDatePicker(
+                          final selected =
+                              await showDatePicker(
                             context: context,
                             firstDate: DateTime(2020),
                             lastDate: DateTime(2100),
                             initialDate: to,
                           );
 
-                          if (date != null) {
+                          if (selected != null) {
                             setDialogState(() {
-                              to = date;
+                              to = selected;
                             });
                           }
                         },
                       ),
                       DropdownButtonFormField<String>(
-                        initialValue: selectedExpert,
+                        value: selectedExpert,
                         decoration: const InputDecoration(
                           labelText: 'کارشناس',
                         ),
-                        items: experts
-                            .map(
-                              (expertName) =>
-                                  DropdownMenuItem<String>(
-                                value: expertName,
-                                child: Text(expertName),
-                              ),
-                            )
-                            .toList(),
+                        items: experts.map((item) {
+                          return DropdownMenuItem<String>(
+                            value: item,
+                            child: Text(item),
+                          );
+                        }).toList(),
                         onChanged: (value) {
-                          if (value != null) {
-                            setDialogState(() {
-                              selectedExpert = value;
-                            });
-                          }
+                          if (value == null) return;
+
+                          setDialogState(() {
+                            selectedExpert = value;
+                          });
                         },
                       ),
                       const SizedBox(height: 12),
@@ -687,7 +755,7 @@ class _HomePageState extends State<HomePage> {
                       ListTile(
                         title: const Text('مجموع ساعات'),
                         trailing: Text(
-                          '${(total / 60).toStringAsFixed(1)}',
+                          (total / 60).toStringAsFixed(1),
                         ),
                       ),
                     ],
@@ -709,7 +777,11 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  Future<void> _editActivities() async {
+  // =====================
+  // مدیریت فعالیت‌ها
+  // =====================
+
+  Future<void> editActivities() async {
     final controller = TextEditingController();
 
     await showDialog(
@@ -718,9 +790,9 @@ class _HomePageState extends State<HomePage> {
         return StatefulBuilder(
           builder: (context, setDialogState) {
             return AlertDialog(
-              title: const Text('دیکشنری فعالیت‌ها'),
+              title: const Text('مدیریت فعالیت‌ها'),
               content: SizedBox(
-                width: 400,
+                width: 420,
                 child: SingleChildScrollView(
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
@@ -732,12 +804,14 @@ class _HomePageState extends State<HomePage> {
                             icon: const Icon(
                               Icons.delete_outline,
                             ),
-                            onPressed: () async {
+                            onPressed: () {
                               setDialogState(() {
                                 activities.remove(activity);
                               });
 
-                              await _save();
+                              _save();
+
+                              setState(() {});
                             },
                           ),
                         ),
@@ -761,22 +835,23 @@ class _HomePageState extends State<HomePage> {
                 ),
                 FilledButton(
                   onPressed: () async {
-                    final newActivity =
-                        controller.text.trim();
+                    final value = controller.text.trim();
 
-                    if (newActivity.isEmpty) {
-                      return;
+                    if (value.isEmpty) return;
+
+                    if (!activities.contains(value)) {
+                      activities.add(value);
                     }
 
-                    if (!activities.contains(newActivity)) {
-                      setDialogState(() {
-                        activities.add(newActivity);
-                      });
+                    await _save();
 
-                      controller.clear();
+                    if (!mounted) return;
 
-                      await _save();
-                    }
+                    setState(() {});
+
+                    controller.clear();
+
+                    setDialogState(() {});
                   },
                   child: const Text('افزودن'),
                 ),
@@ -788,35 +863,18 @@ class _HomePageState extends State<HomePage> {
     );
 
     controller.dispose();
-
-    if (mounted) {
-      setState(() {});
-    }
   }
 
-  void _msg(String message) {
-    if (!mounted) return;
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message),
-      ),
-    );
-  }
+  // =====================
+  // رابط کاربری
+  // =====================
 
   @override
   Widget build(BuildContext context) {
     final manager = tab == 1;
 
-    // استفاده از values برای جلوگیری از مشکل TextDirection.rtl
-    // در محیط Build فعلی GitHub Actions.
-    final rtlDirection = TextDirection.values.firstWhere(
-      (direction) => direction.name == 'rtl',
-      orElse: () => TextDirection.values.last,
-    );
-
     return Directionality(
-      textDirection: rtlDirection,
+      textDirection: TextDirection.rtl,
       child: Scaffold(
         appBar: AppBar(
           title: Text(
@@ -828,7 +886,7 @@ class _HomePageState extends State<HomePage> {
             ? ManagerPage(
                 reports: reports,
                 onImport: importReports,
-                onActivities: _editActivities,
+                onActivities: editActivities,
                 onMonthly: showMonthlyReport,
                 onRange: showRangeReport,
                 onExport: exportManagerCsv,
@@ -863,6 +921,10 @@ class _HomePageState extends State<HomePage> {
   }
 }
 
+// =====================
+// صفحه کارشناس
+// =====================
+
 class ExpertPage extends StatelessWidget {
   final List<Report> reports;
   final VoidCallback onAdd;
@@ -880,21 +942,21 @@ class ExpertPage extends StatelessWidget {
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
-        _card(
+        _menuCard(
           context,
           'ثبت فعالیت جدید',
           'فعالیت روزانه را ثبت کنید',
           Icons.add_task,
           onAdd,
         ),
-        _card(
+        _menuCard(
           context,
           'خروجی گزارش',
           'فایل گزارش را برای مدیر ارسال کنید',
           Icons.upload_file,
           onExport,
         ),
-        const SizedBox(height: 12),
+        const SizedBox(height: 16),
         Text(
           'فعالیت‌های ثبت‌شده',
           style: Theme.of(context).textTheme.titleLarge,
@@ -903,7 +965,7 @@ class ExpertPage extends StatelessWidget {
         if (reports.isEmpty)
           const Card(
             child: Padding(
-              padding: EdgeInsets.all(20),
+              padding: EdgeInsets.all(24),
               child: Center(
                 child: Text(
                   'هنوز فعالیتی ثبت نشده است.',
@@ -919,8 +981,7 @@ class ExpertPage extends StatelessWidget {
               ),
               title: Text(report.activity),
               subtitle: Text(
-                '${report.date} • '
-                '${report.minutes} دقیقه\n'
+                '${report.date} • ${report.minutes} دقیقه\n'
                 '${report.description}',
               ),
               isThreeLine: true,
@@ -931,7 +992,7 @@ class ExpertPage extends StatelessWidget {
     );
   }
 
-  Widget _card(
+  Widget _menuCard(
     BuildContext context,
     String title,
     String subtitle,
@@ -959,6 +1020,10 @@ class ExpertPage extends StatelessWidget {
   }
 }
 
+// =====================
+// صفحه مدیر
+// =====================
+
 class ManagerPage extends StatelessWidget {
   final List<Report> reports;
 
@@ -980,7 +1045,7 @@ class ManagerPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final minutes = reports.fold<int>(
+    final totalMinutes = reports.fold<int>(
       0,
       (sum, report) => sum + report.minutes,
     );
@@ -991,7 +1056,7 @@ class ManagerPage extends StatelessWidget {
         Row(
           children: [
             Expanded(
-              child: _stat(
+              child: _statCard(
                 'گزارش‌ها',
                 '${reports.length}',
                 Icons.description,
@@ -999,9 +1064,9 @@ class ManagerPage extends StatelessWidget {
             ),
             const SizedBox(width: 8),
             Expanded(
-              child: _stat(
+              child: _statCard(
                 'ساعت فعالیت',
-                (minutes / 60).toStringAsFixed(1),
+                (totalMinutes / 60).toStringAsFixed(1),
                 Icons.timer,
               ),
             ),
@@ -1022,59 +1087,37 @@ class ManagerPage extends StatelessWidget {
               ),
             ),
             subtitle: const Text(
-              'فایل JSON ارسالی کارشناس را انتخاب و وارد سیستم کنید',
+              'فایل JSON ارسالی کارشناس را وارد کنید',
             ),
             trailing: const Icon(Icons.chevron_left),
             onTap: onImport,
           ),
         ),
-        Card(
-          child: ListTile(
-            leading: const Icon(Icons.bar_chart),
-            title: const Text('گزارش ماهانه'),
-            subtitle: const Text(
-              'مشاهده خلاصه فعالیت‌های ماه جاری',
-            ),
-            trailing: const Icon(Icons.chevron_left),
-            onTap: onMonthly,
-          ),
+        _actionCard(
+          'گزارش ماهانه',
+          'مشاهده خلاصه فعالیت‌های ماه جاری',
+          Icons.bar_chart,
+          onMonthly,
         ),
-        Card(
-          child: ListTile(
-            leading: const Icon(Icons.date_range),
-            title: const Text('گزارش بازه دلخواه'),
-            subtitle: const Text(
-              'انتخاب تاریخ شروع، پایان و کارشناس',
-            ),
-            trailing: const Icon(Icons.chevron_left),
-            onTap: onRange,
-          ),
+        _actionCard(
+          'گزارش بازه دلخواه',
+          'انتخاب تاریخ شروع، پایان و کارشناس',
+          Icons.date_range,
+          onRange,
         ),
-        Card(
-          child: ListTile(
-            leading: const Icon(Icons.table_view),
-            title: const Text('خروجی تجمیعی'),
-            subtitle: const Text(
-              'خروجی فایل قابل باز شدن در Excel',
-            ),
-            trailing: const Icon(Icons.chevron_left),
-            onTap: onExport,
-          ),
+        _actionCard(
+          'خروجی تجمیعی',
+          'خروجی فایل قابل باز شدن در Excel',
+          Icons.table_view,
+          onExport,
         ),
-        Card(
-          child: ListTile(
-            leading: const Icon(Icons.library_books),
-            title: const Text(
-              'مدیریت دیکشنری فعالیت‌ها',
-            ),
-            subtitle: const Text(
-              'افزودن یا حذف فعالیت‌های پیش‌فرض',
-            ),
-            trailing: const Icon(Icons.chevron_left),
-            onTap: onActivities,
-          ),
+        _actionCard(
+          'مدیریت فعالیت‌ها',
+          'افزودن یا حذف فعالیت‌های پیش‌فرض',
+          Icons.library_books,
+          onActivities,
         ),
-        const SizedBox(height: 12),
+        const SizedBox(height: 16),
         Text(
           'گزارش‌های واردشده',
           style: Theme.of(context).textTheme.titleLarge,
@@ -1083,7 +1126,7 @@ class ManagerPage extends StatelessWidget {
         if (reports.isEmpty)
           const Card(
             child: Padding(
-              padding: EdgeInsets.all(20),
+              padding: EdgeInsets.all(24),
               child: Center(
                 child: Text(
                   'هنوز گزارشی وارد نشده است.',
@@ -1107,7 +1150,7 @@ class ManagerPage extends StatelessWidget {
     );
   }
 
-  Widget _stat(
+  Widget _statCard(
     String title,
     String value,
     IconData icon,
@@ -1129,6 +1172,23 @@ class ManagerPage extends StatelessWidget {
             Text(title),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _actionCard(
+    String title,
+    String subtitle,
+    IconData icon,
+    VoidCallback onTap,
+  ) {
+    return Card(
+      child: ListTile(
+        leading: Icon(icon),
+        title: Text(title),
+        subtitle: Text(subtitle),
+        trailing: const Icon(Icons.chevron_left),
+        onTap: onTap,
       ),
     );
   }
