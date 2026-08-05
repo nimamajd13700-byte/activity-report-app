@@ -11,7 +11,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout repository
+      - name: Checkout
         uses: actions/checkout@v4
 
       - name: Setup Flutter
@@ -19,48 +19,21 @@ jobs:
         with:
           flutter-version: '3.35.0'
           channel: stable
-          cache: true
 
-      - name: Create Flutter project
+      - name: Create missing Flutter files
         run: |
-          flutter create --project-name activity_report_app /tmp/flutter_app
+          flutter create .
 
-      - name: Copy application files
+      - name: Get packages
         run: |
-          rm -rf /tmp/flutter_app/lib
-          cp -r ./lib /tmp/flutter_app/lib
-          cp ./pubspec.yaml /tmp/flutter_app/pubspec.yaml
-
-      - name: Install dependencies
-        working-directory: /tmp/flutter_app
-        run: flutter pub get
+          flutter pub get
 
       - name: Build APK
-        working-directory: /tmp/flutter_app
-        shell: bash
         run: |
-          set +e
-          flutter build apk --release --verbose 2>&1 | tee build.log
-          EXIT_CODE=${PIPESTATUS[0]}
-
-          echo ""
-          echo "=========================================="
-          echo "IMPORTANT BUILD ERRORS"
-          echo "=========================================="
-
-          grep -i -E "FAILURE:|What went wrong:|Caused by:|Exception:|error:" build.log | tail -100 || true
-
-          echo "=========================================="
-          echo "LAST 100 LINES"
-          echo "=========================================="
-
-          tail -100 build.log
-
-          exit $EXIT_CODE
+          flutter build apk --release
 
       - name: Upload APK
-        if: success()
         uses: actions/upload-artifact@v4
         with:
           name: activity-report-apk
-          path: /tmp/flutter_app/build/app/outputs/flutter-apk/app-release.apk
+          path: build/app/outputs/flutter-apk/app-release.apk
