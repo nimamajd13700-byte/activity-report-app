@@ -11,7 +11,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout
+      - name: Checkout repository
         uses: actions/checkout@v4
 
       - name: Setup Flutter
@@ -20,14 +20,26 @@ jobs:
           flutter-version: '3.35.0'
           channel: stable
 
-      - name: Install dependencies
+      - name: Create Flutter project structure
+        run: |
+          mkdir /tmp/flutter_app
+          flutter create --project-name activity_report_app /tmp/flutter_app
+
+      - name: Copy app files
+        run: |
+          cp pubspec.yaml /tmp/flutter_app/pubspec.yaml
+          cp -r lib /tmp/flutter_app/lib
+
+      - name: Get dependencies
+        working-directory: /tmp/flutter_app
         run: flutter pub get
 
       - name: Build APK
+        working-directory: /tmp/flutter_app
         run: flutter build apk --release
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: app-release
-          path: build/app/outputs/flutter-apk/app-release.apk
+          name: activity-report-apk
+          path: /tmp/flutter_app/build/app/outputs/flutter-apk/app-release.apk
