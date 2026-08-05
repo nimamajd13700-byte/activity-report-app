@@ -11,7 +11,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout repository
+      - name: Checkout
         uses: actions/checkout@v4
 
       - name: Setup Flutter
@@ -19,24 +19,13 @@ jobs:
         with:
           channel: stable
 
-      - name: Check Flutter version
+      - name: Flutter version
         run: flutter --version
-
-      - name: Create Flutter project if needed
-        run: |
-          if [ ! -f "pubspec.yaml" ]; then
-            flutter create --project-name activity_report_app .
-          fi
-
-      - name: Verify project name
-        run: |
-          echo "Checking pubspec.yaml..."
-          grep "^name:" pubspec.yaml
 
       - name: Get dependencies
         run: flutter pub get
 
-      - name: Analyze Flutter project
+      - name: Analyze
         run: flutter analyze
 
       - name: Build APK
