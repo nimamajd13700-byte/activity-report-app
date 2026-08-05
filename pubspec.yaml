@@ -1,7 +1,7 @@
 name: activity_report_app
-description: سامانه گزارشات روزانه و تجمیعی مدیریت بازرسی
+description: Offline activity reporting app for inspection management.
 publish_to: "none"
-version: 2.0.0+2
+version: 1.0.0+1
 
 environment:
 sdk: ">=3.4.0 <4.0.0"
@@ -16,10 +16,9 @@ path_provider: ^2.1.4
 share_plus: ^10.0.2
 intl: ^0.19.0
 csv: ^6.0.0
-shamsi_date: ^1.1.1
-pdf: ^3.13.0
-printing: ^5.15.0
-excel: ^4.0.6
+pdf: ^3.11.1
+printing: ^5.13.4
+fl_chart: ^0.69.0
 
 dev_dependencies:
 flutter_test:
