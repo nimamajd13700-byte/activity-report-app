@@ -20,15 +20,20 @@ jobs:
           flutter-version: '3.35.0'
           channel: stable
 
-      - name: Create Flutter project structure
+      - name: Create Flutter project
         run: |
-          mkdir /tmp/flutter_app
           flutter create --project-name activity_report_app /tmp/flutter_app
 
-      - name: Copy app files
+      - name: Replace Flutter demo with our app
         run: |
-          cp pubspec.yaml /tmp/flutter_app/pubspec.yaml
-          cp -r lib /tmp/flutter_app/lib
+          rm -rf /tmp/flutter_app/lib
+          cp -r ./lib /tmp/flutter_app/lib
+          cp ./pubspec.yaml /tmp/flutter_app/pubspec.yaml
+
+      - name: Verify main.dart
+        run: |
+          echo "Checking main.dart..."
+          head -30 /tmp/flutter_app/lib/main.dart
 
       - name: Get dependencies
         working-directory: /tmp/flutter_app
